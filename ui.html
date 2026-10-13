@@ -1,0 +1,125 @@
+<style>
+  body {
+    margin: 0;
+    padding: 12px;
+    font: 12px/1.4 Inter, system-ui, sans-serif;
+    color: var(--figma-color-text);
+    background: var(--figma-color-bg);
+  }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+  button {
+    font: inherit;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid var(--figma-color-border);
+    background: var(--figma-color-bg);
+    color: var(--figma-color-text);
+    cursor: pointer;
+  }
+  button.primary {
+    background: var(--figma-color-bg-brand);
+    color: var(--figma-color-text-onbrand);
+    border-color: transparent;
+  }
+  button:disabled { opacity: 0.4; cursor: default; }
+  #summary { margin: 10px 0 4px; color: var(--figma-color-text-secondary); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  li:hover { background: var(--figma-color-bg-hover); }
+  .swatch {
+    width: 16px;
+    height: 16px;
+    flex: none;
+    border-radius: 4px;
+    border: 1px solid var(--figma-color-border);
+  }
+  .meta { flex: 1; min-width: 0; }
+  .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .detail { color: var(--figma-color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  li button { padding: 3px 8px; flex: none; }
+</style>
+
+<div class="actions">
+  <button class="primary" id="scan-page">Scan page</button>
+  <button id="scan-selection">Scan selection</button>
+  <button id="fix-exact" disabled>Bind exact matches</button>
+</div>
+<div id="summary">Scan to find colors that aren't tied to a token or color style.</div>
+<ul id="list"></ul>
+
+<script>
+  const send = (pluginMessage) => parent.postMessage({ pluginMessage }, "*");
+
+  document.getElementById("scan-page").onclick = () => send({ type: "scan", scope: "page" });
+  document.getElementById("scan-selection").onclick = () => send({ type: "scan", scope: "selection" });
+  document.getElementById("fix-exact").onclick = () => send({ type: "fix-exact" });
+
+  function swatch(hex) {
+    const el = document.createElement("span");
+    el.className = "swatch";
+    el.style.background = hex;
+    return el;
+  }
+
+  window.onmessage = (event) => {
+    const msg = event.data.pluginMessage;
+    if (!msg || msg.type !== "results") return;
+
+    const { items, tokenCount, scope } = msg;
+    const exact = items.filter((i) => i.nearest && i.nearest.exact).length;
+    const close = items.filter((i) => i.nearest && i.nearest.close && !i.nearest.exact).length;
+    const far = items.length - exact - close;
+    const where = scope === "selection" ? "in the selection" : "on this page";
+
+    document.getElementById("summary").textContent =
+      tokenCount === 0
+        ? `${items.length} off-system colors ${where}. This file has no local color variables to snap to yet.`
+        : `${items.length} off-system colors ${where}: ${exact} exact, ${close} close, ${far} with no close token.`;
+    document.getElementById("fix-exact").disabled = exact === 0;
+
+    const list = document.getElementById("list");
+    list.replaceChildren();
+    for (const item of items) {
+      const li = document.createElement("li");
+      li.onclick = () => send({ type: "select", id: item.id });
+      li.appendChild(swatch(item.hex));
+
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      const name = document.createElement("div");
+      name.className = "name";
+      name.textContent = item.name;
+      const detail = document.createElement("div");
+      detail.className = "detail";
+      const n = item.nearest;
+      detail.textContent = !n
+        ? `${item.kind} ${item.hex}`
+        : n.exact
+          ? `${item.kind} ${item.hex} → ${n.name} (exact)`
+          : n.close
+            ? `${item.kind} ${item.hex} → ${n.name} ${n.hex}`
+            : `${item.kind} ${item.hex}, no close token (nearest is ${n.name})`;
+      meta.append(name, detail);
+      li.appendChild(meta);
+
+      if (n && n.close) {
+        const button = document.createElement("button");
+        button.textContent = "Snap";
+        button.title = `Bind to ${item.nearest.name}`;
+        button.onclick = (e) => {
+          e.stopPropagation();
+          send({ type: "snap", id: item.id, kind: item.kind, index: item.index });
+        };
+        li.appendChild(button);
+      }
+      list.appendChild(li);
+    }
+  };
+</script>

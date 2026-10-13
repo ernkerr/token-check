@@ -1,0 +1,14 @@
+{
+  "name": "token-check",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Figma plugin that finds colors not tied to a design token and snaps them to the nearest one.",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "watch": "tsc -p tsconfig.json --watch"
+  },
+  "devDependencies": {
+    "@figma/plugin-typings": "^1.141.0",
+    "typescript": "^7.0.2"
+  }
+}
