@@ -17,8 +17,6 @@ At OrderSync I caught design-system drift in code: a Playwright script screensho
 3. In the **Figma desktop app**: Plugins → Development → Import plugin from manifest… → pick `manifest.json`
 4. Run it from Plugins → Development → Token Check
 
-If Figma rejects the placeholder `id` in `manifest.json`, create a plugin with Plugins → Development → New plugin, copy the `id` it generates into this manifest, and import again.
-
 ## How it works
 
 - `code.ts` runs in Figma's plugin sandbox. It walks the nodes, reads `fills` and `strokes`, and skips any paint that's bound to a variable (`paint.boundVariables.color`) or comes from a color style. It finds the nearest local color variable with `resolveForConsumer`, so light and dark modes resolve correctly. Then it binds the variable with `figma.variables.setBoundVariableForPaint`.
