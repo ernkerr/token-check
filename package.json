@@ -5,7 +5,8 @@
   "description": "Figma plugin that finds colors not tied to a design token and snaps them to the nearest one.",
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "watch": "tsc -p tsconfig.json --watch"
+    "watch": "tsc -p tsconfig.json --watch",
+    "test": "tsc -p tsconfig.json && node test/plugin.test.mjs"
   },
   "devDependencies": {
     "@figma/plugin-typings": "^1.141.0",

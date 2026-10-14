@@ -24,6 +24,11 @@ If Figma rejects the placeholder `id` in `manifest.json`, create a plugin with P
 - `code.ts` runs in Figma's plugin sandbox. It walks the nodes, reads `fills` and `strokes`, and skips any paint that's bound to a variable (`paint.boundVariables.color`) or comes from a color style. It finds the nearest local color variable with `resolveForConsumer`, so light and dark modes resolve correctly. Then it binds the variable with `figma.variables.setBoundVariableForPaint`.
 - `ui.html` is the panel. It talks to `code.ts` with `postMessage` and uses Figma's theme colors, so it matches light and dark mode.
 - Colors inside instances are skipped, because they belong to the main component.
+- Hidden layers are skipped. Big pages are scanned in batches with a progress count, so Figma stays responsive, and each token is resolved once per variable mode instead of once per layer.
+
+## Test it
+
+`npm test` builds the plugin and runs `code.js` against a fake Figma API, so the scan, snap and edge cases (deleted layers, broken tokens, empty selection, a 2,000-layer page) can be checked without opening Figma.
 
 ## Next
 

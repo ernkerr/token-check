@@ -44,6 +44,7 @@
   .name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .detail { color: var(--figma-color-text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   li button { padding: 3px 8px; flex: none; }
+  #more { margin-top: 6px; color: var(--figma-color-text-secondary); }
 </style>
 
 <div class="actions">
@@ -53,13 +54,32 @@
 </div>
 <div id="summary">Scan to find colors that aren't tied to a token or color style.</div>
 <ul id="list"></ul>
+<div id="more"></div>
 
 <script>
-  const send = (pluginMessage) => parent.postMessage({ pluginMessage }, "*");
+  // Long lists slow the panel down, so only this many rows are drawn at once.
+  const MAX_ROWS = 300;
 
-  document.getElementById("scan-page").onclick = () => send({ type: "scan", scope: "page" });
-  document.getElementById("scan-selection").onclick = () => send({ type: "scan", scope: "selection" });
-  document.getElementById("fix-exact").onclick = () => send({ type: "fix-exact" });
+  const send = (pluginMessage) => parent.postMessage({ pluginMessage }, "*");
+  const summary = document.getElementById("summary");
+  const buttons = Array.from(document.querySelectorAll("button"));
+  let exactCount = 0;
+
+  // Lock the buttons while the plugin works, so two scans can't overlap.
+  function setBusy(busy, text) {
+    for (const button of buttons) button.disabled = busy;
+    document.getElementById("fix-exact").disabled = busy || exactCount === 0;
+    if (text) summary.textContent = text;
+  }
+
+  function run(pluginMessage, text) {
+    setBusy(true, text);
+    send(pluginMessage);
+  }
+
+  document.getElementById("scan-page").onclick = () => run({ type: "scan", scope: "page" }, "Scanning…");
+  document.getElementById("scan-selection").onclick = () => run({ type: "scan", scope: "selection" }, "Scanning…");
+  document.getElementById("fix-exact").onclick = () => run({ type: "fix-exact" }, "Binding exact matches…");
 
   function swatch(hex) {
     const el = document.createElement("span");
@@ -70,7 +90,21 @@
 
   window.onmessage = (event) => {
     const msg = event.data.pluginMessage;
-    if (!msg || msg.type !== "results") return;
+    if (!msg) return;
+
+    if (msg.type === "progress") {
+      summary.textContent = `Scanning… ${msg.seen.toLocaleString()} layers checked`;
+      return;
+    }
+    if (msg.type === "empty-selection") {
+      setBusy(false, "Select one or more layers first, or use Scan page.");
+      return;
+    }
+    if (msg.type === "error") {
+      setBusy(false, "Something went wrong. Try scanning again.");
+      return;
+    }
+    if (msg.type !== "results") return;
 
     const { items, tokenCount, scope } = msg;
     const exact = items.filter((i) => i.nearest && i.nearest.exact).length;
@@ -78,15 +112,22 @@
     const far = items.length - exact - close;
     const where = scope === "selection" ? "in the selection" : "on this page";
 
-    document.getElementById("summary").textContent =
-      tokenCount === 0
-        ? `${items.length} off-system colors ${where}. This file has no local color variables to snap to yet.`
-        : `${items.length} off-system colors ${where}: ${exact} exact, ${close} close, ${far} with no close token.`;
-    document.getElementById("fix-exact").disabled = exact === 0;
+    exactCount = exact;
+    setBusy(
+      false,
+      items.length === 0
+        ? `No off-system colors ${where}. Everything uses a token or a color style.`
+        : tokenCount === 0
+          ? `${items.length} off-system colors ${where}. This file has no local color variables to snap to yet.`
+          : `${items.length} off-system colors ${where}: ${exact} exact, ${close} close, ${far} with no close token.`
+    );
+
+    document.getElementById("more").textContent =
+      items.length > MAX_ROWS ? `Showing the first ${MAX_ROWS}. Fix some and scan again to see the rest.` : "";
 
     const list = document.getElementById("list");
     list.replaceChildren();
-    for (const item of items) {
+    for (const item of items.slice(0, MAX_ROWS)) {
       const li = document.createElement("li");
       li.onclick = () => send({ type: "select", id: item.id });
       li.appendChild(swatch(item.hex));
@@ -115,7 +156,7 @@
         button.title = `Bind to ${item.nearest.name}`;
         button.onclick = (e) => {
           e.stopPropagation();
-          send({ type: "snap", id: item.id, kind: item.kind, index: item.index });
+          run({ type: "snap", id: item.id, kind: item.kind, index: item.index }, "Snapping…");
         };
         li.appendChild(button);
       }
